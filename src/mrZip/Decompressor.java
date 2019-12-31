@@ -23,68 +23,57 @@ public class Decompressor {
 			fileScanner = new Scanner(f);
 			String encodedChar;
 			String addedChar;
-			char segmentKeyChar1 = '"'; // First two characters in ascii at index 32
-			char segmentKeyChar2 = '"';
-			char retrievalKeyChar1 = '"';
-			char retrievalKeyChar2 = '"';
+			String retrievalKey = "";
+			String segmentKey = "";
+			int numbSegChars = 0;
 			boolean newLine = false;
+			int buffer = 1;
 			while (fileScanner.hasNextLine()) {
-				int lineIndex = 0;
-				if(newLine) {
-					writer.print(System.getProperty("line.separator"));
-				}
-				newLine = true;
 				String line = fileScanner.nextLine();
 				char[] lineArray = line.toCharArray();
-				for (int i = 0; i < (lineArray.length) / 3; i++) {
-					// First key is assumed to start at "" and continue upward (example "#,"$,"%
-					// First Digit
-					char encodedChar1 = lineArray[lineIndex++];
-					encodedChar = "" + encodedChar1;
-					// Second Digit
-					char encodedChar2 = lineArray[lineIndex++];
-					encodedChar += encodedChar2;
-
-					// Third digit
-					// If new digit it found
-					if (encodedChar.equals("  ")) {
+				if (newLine) {
+					writer.print(System.getProperty("line.separator"));
+				} else {
+					numbSegChars = Character.getNumericValue(lineArray[0]);
+					for (int i = 0; i < numbSegChars; i++) {
+						retrievalKey += '"';
+					}
+					segmentKey = retrievalKey;
+				}
+				newLine = true;
+				for (int i = 0 + buffer; i < (lineArray.length); i += 0) {
+					// First key is assumed to start at "" and continue upward ("#,"$,"%)
+					encodedChar = "";
+					for (int j = 0; j < numbSegChars; j++) {
+						encodedChar += lineArray[i++];
+					}
+					char[] encodedArray = encodedChar.toCharArray();
+					// If new digit is found
+					if (encodedArray[0] == ' ') {
 						// Third Digit
-						addedChar = "" + lineArray[lineIndex++];
+						addedChar = "" + lineArray[i++];
 					}
-					// ! As the first character of a segment
-					//represents a duplicate segment from a previous key.
-					else if (encodedChar1 == '!') {
-						addedChar = map.get("" + encodedChar2 + lineArray[lineIndex++]);
+					// represents a duplicate segment from a previous key.
+					else if (encodedArray[0] == '!') {
+						String dupKey = "";
+						for (int j = 1; j < encodedArray.length; j++) {
+							dupKey += encodedArray[j];
+						}
+						dupKey += lineArray[i++];
+						addedChar = map.get(dupKey);
 					}
-					
 					// If encoded segment references a previous segment
 					else {
-						addedChar = "" + map.get(encodedChar) + lineArray[lineIndex++];
+						addedChar = "" + map.get(encodedChar) + lineArray[i++];
 					}
-					String segmentKey = "" + segmentKeyChar1 + segmentKeyChar2;
 					map.put(segmentKey, addedChar);
-
-					// Rollover statements for both segmentKeyChars
-					if ((int) segmentKeyChar2 == 127) {
-						segmentKeyChar2 = '"';
-						segmentKeyChar1++;
-					} else {
-						segmentKeyChar2++;
-					}
-					
+					segmentKey = incrementSegmentKey(segmentKey);
 				}
-				while(!(retrievalKeyChar2 == segmentKeyChar2 && retrievalKeyChar1 == segmentKeyChar1)) {
-						String retrievalKey = "" + retrievalKeyChar1 + retrievalKeyChar2;
-						writer.print(map.get(retrievalKey));
-						if ((int) retrievalKeyChar2 == 127) {
-							retrievalKeyChar2 = '"';
-							retrievalKeyChar1++;
-						} else {
-							retrievalKeyChar2++;
-						}
+				buffer = 0;
+				while (!retrievalKey.equals(segmentKey)) {
+					writer.print(map.get(retrievalKey));
+					retrievalKey = incrementSegmentKey(retrievalKey);
 				}
-				retrievalKeyChar2 = segmentKeyChar2;
-				retrievalKeyChar1 = segmentKeyChar1;
 			}
 			writer.close();
 			fileScanner.close();
@@ -94,5 +83,21 @@ public class Decompressor {
 			e.printStackTrace();
 			throw new AssertionError("UTF-8 is unknown");
 		}
+	}
+
+	public static String incrementSegmentKey(String key) {
+		char[] keyArray = key.toCharArray();
+		boolean rollover = true;
+		for (int i = keyArray.length - 1; i >= 0; i--) {
+			if (rollover) {
+				if ((int) keyArray[i] == 127) {
+					keyArray[i] = '"';
+				} else {
+					keyArray[i]++;
+					rollover = false;
+				}
+			}
+		}
+		return (new String(keyArray));
 	}
 }
